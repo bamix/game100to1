@@ -46,10 +46,11 @@ public class GameService
     {
         this.gameState.CurrentRound = 1;
         this.gameState.IsGameActive = true;
-        this.gameState.IsRoundActive = false;
+        this.gameState.IsRoundActive = true; // Сразу активируем раунд
         this.gameState.RevealedAnswers.Clear();
         this.gameState.CurrentMode = GameMode.Normal;
         this.gameState.RoundMultiplier = 1;
+        this.gameState.RoundPoints = 0; // Сброс счетчика очков раунда
 
         foreach (var team in this.gameState.Teams)
         {
@@ -80,7 +81,20 @@ public class GameService
         if (this.gameState.CurrentRound < 5)
         {
             this.gameState.CurrentRound++;
-            this.gameState.IsRoundActive = false;
+            this.gameState.IsRoundActive = true; // Сразу активируем раунд
+            
+            // Сбрасываем раскрытые ответы
+            this.gameState.RevealedAnswers.Clear();
+            
+            // Сбрасываем счетчик очков раунда
+            this.gameState.RoundPoints = 0;
+            
+            // Сбрасываем ошибки команд
+            foreach (var team in this.gameState.Teams)
+            {
+                team.Errors = 0;
+            }
+            
             LoadRandomQuestion();
         }
     }
@@ -98,41 +112,37 @@ public class GameService
             if (!this.gameState.RevealedAnswers.Contains(answerIndex))
             {
                 this.gameState.RevealedAnswers.Add(answerIndex);
+                
+                // Добавляем очки к счетчику раунда
+                var answer = this.gameState.CurrentQuestion.Answers[answerIndex];
+                this.gameState.RoundPoints += answer.Points;
             }
         }
     }
 
-    public void AwardPoints(int teamId, int answerIndex)
+    public void RevealAnswerWithoutPoints(int answerIndex)
+    {
+        if (answerIndex >= 0 && answerIndex < (this.gameState.CurrentQuestion?.Answers.Count ?? 0))
+        {
+            if (!this.gameState.RevealedAnswers.Contains(answerIndex))
+            {
+                this.gameState.RevealedAnswers.Add(answerIndex);
+                // Не добавляем очки к счетчику раунда
+            }
+        }
+    }
+
+    public void AwardRoundPoints(int teamId)
     {
         var team = this.gameState.Teams.FirstOrDefault(t => t.Id == teamId);
-        if (team != null && this.gameState.CurrentQuestion != null &&
-            answerIndex >= 0 && answerIndex < this.gameState.CurrentQuestion.Answers.Count)
+        if (team != null)
         {
-            var answer = this.gameState.CurrentQuestion.Answers[answerIndex];
-            int points = answer.Points * this.gameState.RoundMultiplier;
-
-            // В режиме "редкий ответ" очки получает команда с самым низким ответом
-            if (this.gameState.CurrentMode == GameMode.RareAnswer)
-            {
-                // Найти самый низкий открытый ответ
-                var revealedAnswers = this.gameState.RevealedAnswers
-                    .Select(i => this.gameState.CurrentQuestion.Answers[i])
-                    .ToList();
-
-                if (revealedAnswers.Any())
-                {
-                    var lowestAnswer = revealedAnswers.OrderBy(a => a.Points).First();
-                    if (answer.Points == lowestAnswer.Points)
-                    {
-                        team.Score += answer.Points; // В этом режиме множитель не применяется
-                    }
-                }
-            }
-            else
-            {
-                team.Score += points;
-            }
+            // Присваиваем все накопленные очки раунда команде с применением множителя
+            int finalPoints = this.gameState.RoundPoints * this.gameState.RoundMultiplier;
+            team.Score += finalPoints;
             
+            // Сбрасываем счетчик очков раунда
+            this.gameState.RoundPoints = 0;
         }
     }
 
@@ -151,6 +161,15 @@ public class GameService
         if (team != null && team.Errors > 0)
         {
             team.Errors--;
+        }
+    }
+
+    public void SetTeamScore(int teamId, int newScore)
+    {
+        var team = this.gameState.Teams.FirstOrDefault(t => t.Id == teamId);
+        if (team != null)
+        {
+            team.Score = Math.Max(0, newScore); // Не позволяем отрицательные очки
         }
     }
 

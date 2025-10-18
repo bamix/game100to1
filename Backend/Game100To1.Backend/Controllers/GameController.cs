@@ -97,20 +97,35 @@ public class GameController(GameService gameService, IHubContext<GameHub> hubCon
     }
 
     /// <summary>
-    /// Начислить очки команде за ответ
+    /// Открыть ответ по индексу без начисления очков
+    /// </summary>
+    /// <param name="answerIndex">Индекс ответа (0-4)</param>
+    /// <returns>Подтверждение открытия ответа</returns>
+    /// <response code="200">Ответ успешно открыт без начисления очков</response>
+    [HttpPost("reveal-answer-no-points/{answerIndex}")]
+    [ProducesResponseType<RevealAnswerResponse>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<RevealAnswerResponse>> RevealAnswerWithoutPoints(int answerIndex)
+    {
+        gameService.RevealAnswerWithoutPoints(answerIndex);
+        await hubContext.Clients.All.SendAsync("AnswerRevealed", answerIndex);
+        await hubContext.Clients.All.SendAsync("GameStateChanged", gameService.GetGameState());
+        return Ok(new RevealAnswerResponse($"Ответ {answerIndex + 1} открыт без очков", answerIndex));
+    }
+
+    /// <summary>
+    /// Присвоить все очки раунда команде
     /// </summary>
     /// <param name="teamId">ID команды (1 или 2)</param>
-    /// <param name="answerIndex">Индекс ответа (0-4)</param>
-    /// <returns>Подтверждение начисления очков</returns>
-    /// <response code="200">Очки успешно начислены</response>
-    [HttpPost("award-points/{teamId}/{answerIndex}")]
+    /// <returns>Подтверждение присвоения очков</returns>
+    /// <response code="200">Очки раунда успешно присвоены команде</response>
+    [HttpPost("award-round-points/{teamId}")]
     [ProducesResponseType<AwardPointsResponse>(StatusCodes.Status200OK)]
-    public async Task<ActionResult<AwardPointsResponse>> AwardPoints(int teamId, int answerIndex)
+    public async Task<ActionResult<AwardPointsResponse>> AwardRoundPoints(int teamId)
     {
-        gameService.AwardPoints(teamId, answerIndex);
+        gameService.AwardRoundPoints(teamId);
         await hubContext.Clients.All.SendAsync("ScoreUpdated", gameService.GetGameState().Teams);
         await hubContext.Clients.All.SendAsync("GameStateChanged", gameService.GetGameState());
-        return Ok(new AwardPointsResponse($"Очки начислены команде {teamId}", teamId, answerIndex));
+        return Ok(new AwardPointsResponse($"Очки раунда присвоены команде {teamId}", teamId, 0));
     }
 
     /// <summary>
@@ -143,6 +158,23 @@ public class GameController(GameService gameService, IHubContext<GameHub> hubCon
         await hubContext.Clients.All.SendAsync("ErrorsUpdated", gameService.GetGameState().Teams);
         await hubContext.Clients.All.SendAsync("GameStateChanged", gameService.GetGameState());
         return Ok(new RemoveErrorResponse($"Ошибка убрана у команды {teamId}", teamId));
+    }
+
+    /// <summary>
+    /// Установить количество очков команды
+    /// </summary>
+    /// <param name="teamId">ID команды (1 или 2)</param>
+    /// <param name="score">Новое количество очков</param>
+    /// <returns>Подтверждение изменения очков</returns>
+    /// <response code="200">Очки команды успешно изменены</response>
+    [HttpPost("set-team-score/{teamId}/{score}")]
+    [ProducesResponseType<SetTeamScoreResponse>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<SetTeamScoreResponse>> SetTeamScore(int teamId, int score)
+    {
+        gameService.SetTeamScore(teamId, score);
+        await hubContext.Clients.All.SendAsync("ScoreUpdated", gameService.GetGameState().Teams);
+        await hubContext.Clients.All.SendAsync("GameStateChanged", gameService.GetGameState());
+        return Ok(new SetTeamScoreResponse($"Очки команды {teamId} установлены на {score}", teamId, score));
     }
 
     /// <summary>

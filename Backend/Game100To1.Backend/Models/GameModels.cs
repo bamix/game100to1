@@ -10,6 +10,7 @@ public class GameState
     public bool IsRoundActive { get; set; } = false;
     public List<int> RevealedAnswers { get; set; } = new();
     public GameMode CurrentMode { get; set; } = GameMode.Normal;
+    public int RoundPoints { get; set; } = 0; // Накопленные очки за раунд
 }
 
 public class Team

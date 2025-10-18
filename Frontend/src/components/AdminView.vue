@@ -34,14 +34,8 @@
         <button @click="startNewGame" class="btn btn-success">
           🎯 Новая игра
         </button>
-        <button @click="startRound" class="btn btn-warning" :disabled="!gameState.isGameActive">
-          ▶️ Начать раунд
-        </button>
         <button @click="nextRound" class="btn btn-info" :disabled="!gameState.isGameActive || gameState.currentRound >= 5">
           ⏭️ Следующий раунд
-        </button>
-        <button @click="nextQuestion" class="btn btn-secondary" :disabled="!gameState.isGameActive">
-          🔄 Следующий вопрос
         </button>
       </div>
     </div>
@@ -59,6 +53,14 @@
         <div class="status-item">
           <strong>Режим:</strong> 
           {{ gameState.currentMode === 0 ? 'Обычный' : 'Редкий ответ' }}
+        </div>
+        <div class="status-item">
+          <strong>Очки раунда:</strong> 
+          <span class="round-points">{{ gameState.roundPoints || 0 }}</span>
+        </div>
+        <div class="status-item">
+          <strong>Итого с множителем:</strong> 
+          <span class="final-points">{{ (gameState.roundPoints || 0) * gameState.roundMultiplier }}</span>
         </div>
         <div class="status-item">
           <strong>Игра активна:</strong> 
@@ -111,6 +113,26 @@
           <h3>{{ team.name }}</h3>
           <div class="team-score">Очки: {{ team.score }}</div>
           <div class="team-errors">Ошибки: {{ team.errors }} / 3</div>
+          
+          <!-- Блок изменения очков -->
+          <div class="score-controls">
+            <label :for="'newScore' + team.id">Новые очки:</label>
+            <input 
+              :id="'newScore' + team.id"
+              type="number" 
+              :value="team.id === 1 ? team1NewScore : team2NewScore"
+              @input="team.id === 1 ? team1NewScore = $event.target.value : team2NewScore = $event.target.value"
+              min="0"
+              class="score-input"
+            />
+            <button 
+              @click="setTeamScore(team.id, team.id === 1 ? team1NewScore : team2NewScore)" 
+              class="btn btn-primary btn-sm"
+            >
+              ✏️ Установить
+            </button>
+          </div>
+          
           <div class="team-controls">
             <button @click="addError(team.id)" class="btn btn-danger btn-sm" :disabled="team.errors >= 3">
               ❌ Добавить ошибку
@@ -154,24 +176,35 @@
                 >
                   👁️ Открыть
                 </button>
-                
                 <button 
-                  @click="awardPoints(1, index)" 
-                  class="btn btn-success btn-sm"
-                  :disabled="!gameState.revealedAnswers.includes(index)"
+                  @click="revealAnswerWithoutPoints(index)" 
+                  class="btn btn-secondary btn-sm"
+                  :disabled="gameState.revealedAnswers.includes(index)"
                 >
-                  ➕ {{ gameState.teams[0]?.name || 'Команда 1' }}
-                </button>
-                
-                <button 
-                  @click="awardPoints(2, index)" 
-                  class="btn btn-success btn-sm"
-                  :disabled="!gameState.revealedAnswers.includes(index)"
-                >
-                  ➕ {{ gameState.teams[1]?.name || 'Команда 2' }}
+                  👁️ Без очков
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+        
+        <!-- Кнопки присвоения очков команде -->
+        <div class="round-award-section" v-if="gameState.roundPoints > 0">
+          <h3>Присвоить очки раунда команде</h3>
+          <div class="award-buttons">
+            <button 
+              @click="awardRoundPoints(1)" 
+              class="btn btn-success"
+            >
+              🏆 {{ gameState.teams[0]?.name || 'Команда 1' }} (+{{ (gameState.roundPoints || 0) * gameState.roundMultiplier }})
+            </button>
+            
+            <button 
+              @click="awardRoundPoints(2)" 
+              class="btn btn-success"
+            >
+              🏆 {{ gameState.teams[1]?.name || 'Команда 2' }} (+{{ (gameState.roundPoints || 0) * gameState.roundMultiplier }})
+            </button>
           </div>
         </div>
       </div>
@@ -197,6 +230,8 @@ export default {
       team2Name: 'Команда 2',
       selectedMultiplier: 1,  // Выбранный множитель
       selectedMode: 0,        // Выбранный режим игры
+      team1NewScore: 0,       // Новые очки для команды 1
+      team2NewScore: 0,       // Новые очки для команды 2
       gameState: {
         teams: [],
         currentRound: 1,
@@ -205,7 +240,8 @@ export default {
         isGameActive: false,
         isRoundActive: false,
         revealedAnswers: [],
-        currentMode: 0
+        currentMode: 0,
+        roundPoints: 0
       }
     }
   },
@@ -252,6 +288,12 @@ export default {
           // Синхронизируем множитель и режим
           this.selectedMultiplier = gameState.roundMultiplier || 1
           this.selectedMode = gameState.currentMode || 0
+          
+          // Синхронизируем поля ввода очков с текущими очками команд
+          if (gameState.teams && gameState.teams.length >= 2) {
+            this.team1NewScore = gameState.teams[0].score || 0
+            this.team2NewScore = gameState.teams[1].score || 0
+          }
         } else {
           console.warn('Invalid gameState received from SignalR:', gameState)
         }
@@ -305,6 +347,12 @@ export default {
           this.selectedMultiplier = this.gameState.roundMultiplier || 1
           this.selectedMode = this.gameState.currentMode || 0
           console.log('Synced round settings - Multiplier:', this.selectedMultiplier, 'Mode:', this.selectedMode)
+          
+          // Синхронизируем поля ввода очков с текущими очками команд
+          if (this.gameState.teams && this.gameState.teams.length >= 2) {
+            this.team1NewScore = this.gameState.teams[0].score || 0
+            this.team2NewScore = this.gameState.teams[1].score || 0
+          }
         } else {
           console.error('Failed to load game state, status:', response.status)
         }
@@ -387,18 +435,6 @@ export default {
       }
     },
 
-    async startRound() {
-      try {
-        const response = await fetch('/api/game/start-round', { method: 'POST' })
-        if (response.ok) {
-          this.showSuccess('Раунд начался')
-        }
-      } catch (error) {
-        console.error('Error starting round:', error)
-        this.showError('Ошибка при запуске раунда')
-      }
-    },
-
     async nextRound() {
       try {
         const response = await fetch('/api/game/next-round', { method: 'POST' })
@@ -408,18 +444,6 @@ export default {
       } catch (error) {
         console.error('Error going to next round:', error)
         this.showError('Ошибка при переходе к следующему раунду')
-      }
-    },
-
-    async nextQuestion() {
-      try {
-        const response = await fetch('/api/game/next-question', { method: 'POST' })
-        if (response.ok) {
-          this.showSuccess('Загружен новый вопрос')
-        }
-      } catch (error) {
-        console.error('Error loading next question:', error)
-        this.showError('Ошибка при загрузке нового вопроса')
       }
     },
 
@@ -435,15 +459,27 @@ export default {
       }
     },
 
-    async awardPoints(teamId, answerIndex) {
+    async revealAnswerWithoutPoints(answerIndex) {
       try {
-        const response = await fetch(`/api/game/award-points/${teamId}/${answerIndex}`, { method: 'POST' })
+        const response = await fetch(`/api/game/reveal-answer-no-points/${answerIndex}`, { method: 'POST' })
         if (response.ok) {
-          this.showSuccess('Очки начислены')
+          this.showSuccess('Ответ открыт без очков')
         }
       } catch (error) {
-        console.error('Error awarding points:', error)
-        this.showError('Ошибка при начислении очков')
+        console.error('Error revealing answer without points:', error)
+        this.showError('Ошибка при открытии ответа без очков')
+      }
+    },
+
+    async awardRoundPoints(teamId) {
+      try {
+        const response = await fetch(`/api/game/award-round-points/${teamId}`, { method: 'POST' })
+        if (response.ok) {
+          this.showSuccess('Очки раунда присвоены команде')
+        }
+      } catch (error) {
+        console.error('Error awarding round points:', error)
+        this.showError('Ошибка при присвоении очков раунда')
       }
     },
 
@@ -468,6 +504,24 @@ export default {
       } catch (error) {
         console.error('Error removing error:', error)
         this.showError('Ошибка при удалении ошибки')
+      }
+    },
+
+    async setTeamScore(teamId, newScore) {
+      try {
+        const score = parseInt(newScore)
+        if (isNaN(score) || score < 0) {
+          this.showError('Введите корректное количество очков (0 или больше)')
+          return
+        }
+        
+        const response = await fetch(`/api/game/set-team-score/${teamId}/${score}`, { method: 'POST' })
+        if (response.ok) {
+          this.showSuccess(`Очки команды ${teamId} установлены на ${score}`)
+        }
+      } catch (error) {
+        console.error('Error setting team score:', error)
+        this.showError('Ошибка при установке очков команды')
       }
     },
 
@@ -700,6 +754,34 @@ export default {
   margin-top: 1rem;
 }
 
+.score-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: center;
+  margin: 0.8rem 0;
+  padding: 0.8rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+.score-controls label {
+  font-weight: 600;
+  color: #e0e0e0;
+  min-width: fit-content;
+}
+
+.score-input {
+  width: 80px;
+  padding: 0.4rem;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #2a2a2a;
+  color: white;
+  text-align: center;
+  font-weight: 600;
+}
+
 .current-question {
   background: rgba(255, 255, 255, 0.15);
   padding: 1.5rem;
@@ -771,6 +853,47 @@ export default {
 .answer-controls {
   display: flex;
   gap: 0.5rem;
+}
+
+/* Стили для счетчика очков раунда */
+.round-points {
+  font-weight: bold;
+  color: #ff6b35;
+  font-size: 1.1em;
+}
+
+.final-points {
+  font-weight: bold;
+  color: #4caf50;
+  font-size: 1.2em;
+}
+
+/* Стили для секции присвоения очков */
+.round-award-section {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.round-award-section h3 {
+  color: #ffdd00;
+  margin-bottom: 1rem;
+  font-size: 1.3rem;
+}
+
+.award-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.award-buttons .btn {
+  font-size: 1.1rem;
+  padding: 0.8rem 1.5rem;
+  min-width: 200px;
 }
 
 /* Система уведомлений */

@@ -84,10 +84,10 @@ export class GameApiService {
   }
 
   /**
-   * Начислить очки команде
+   * Присвоить все очки раунда команде
    */
-  static async awardPoints(teamId: number, answerIndex: number): Promise<AwardPointsResponse> {
-    const response: AxiosResponse<AwardPointsResponse> = await api.post(`/game/award-points/${teamId}/${answerIndex}`);
+  static async awardRoundPoints(teamId: number): Promise<AwardPointsResponse> {
+    const response: AxiosResponse<AwardPointsResponse> = await api.post(`/game/award-round-points/${teamId}`);
     return response.data;
   }
 

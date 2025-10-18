@@ -4,7 +4,7 @@
   "description": "Frontend for 100 to 1 game",
   "main": "src/main.ts",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "build": "vue-tsc && vite build --outDir ../Backend/Game100To1.Backend/wwwroot",
     "build:dev": "vite build --outDir ../Backend/Game100To1.Backend/wwwroot",
     "preview": "vite preview",

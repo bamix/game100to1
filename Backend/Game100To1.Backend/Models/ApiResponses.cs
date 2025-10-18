@@ -63,6 +63,11 @@ public record AddErrorResponse(string Message, int TeamId) : ApiResponse;
 public record RemoveErrorResponse(string Message, int TeamId) : ApiResponse;
 
 /// <summary>
+/// Ответ при установке очков команды
+/// </summary>
+public record SetTeamScoreResponse(string Message, int TeamId, int Score) : ApiResponse;
+
+/// <summary>
 /// Ответ при установке названий команд
 /// </summary>
 public record SetTeamNamesResponse(string Message, string Team1, string Team2) : ApiResponse;

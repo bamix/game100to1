@@ -20,7 +20,9 @@
 
       <!-- Центральный блок с названием игры -->
       <div class="game-center">
-        <h1 class="game-title">100 К 1</h1>
+        <h1 class="game-title">
+          {{ (gameState.roundPoints || 0) * (gameState.roundMultiplier || 1) }}
+        </h1>
         <div class="round-info">
           <span class="round">Раунд {{ gameState.currentRound }}</span>
           <span class="multiplier" v-if="gameState.currentMode === 0">
@@ -99,10 +101,113 @@ const gameState = ref<GameState>({
   isGameActive: false,
   isRoundActive: false,
   revealedAnswers: [],
-  currentMode: GameMode.Normal
+  currentMode: GameMode.Normal,
+  roundPoints: 0
 })
+
+// Переменная для отслеживания предыдущего раунда
+const previousRound = ref<number>(1)
+
+// Звуковые эффекты
+const successAudio = ref<HTMLAudioElement | null>(null)
+const errorAudio = ref<HTMLAudioElement | null>(null)
+const newRoundAudio = ref<HTMLAudioElement | null>(null)
+
+// Инициализация звуковых файлов
+const initAudioFiles = (): void => {
+  try {
+    // Звук успешного открытия карточки
+    successAudio.value = new Audio('/sounds/success.mp3')
+    successAudio.value.preload = 'auto'
+    successAudio.value.volume = 0.7
+    
+    // Обработчик ошибок загрузки для success звука
+    successAudio.value.addEventListener('error', (e) => {
+      console.warn('⚠️ Не удалось загрузить success.mp3:', e)
+      successAudio.value = null
+    })
+    
+    // Звук ошибки/неправильного ответа
+    errorAudio.value = new Audio('/sounds/error.mp3')
+    errorAudio.value.preload = 'auto'
+    errorAudio.value.volume = 0.8
+    
+    // Обработчик ошибок загрузки для error звука
+    errorAudio.value.addEventListener('error', (e) => {
+      console.warn('⚠️ Не удалось загрузить error.mp3:', e)
+      errorAudio.value = null
+    })
+    
+    // Звук нового раунда
+    newRoundAudio.value = new Audio('/sounds/newround.mp3')
+    newRoundAudio.value.preload = 'auto'
+    newRoundAudio.value.volume = 0.6
+    
+    // Обработчик ошибок загрузки для newround звука
+    newRoundAudio.value.addEventListener('error', (e) => {
+      console.warn('⚠️ Не удалось загрузить newround.mp3:', e)
+      newRoundAudio.value = null
+    })
+    
+    console.log('🎵 Звуковые файлы инициализированы')
+  } catch (error) {
+    console.warn('⚠️ Ошибка инициализации звуковых файлов:', error)
+  }
+}
+
+// Воспроизведение звука успешного открытия карточки
+const playSuccessSound = (): void => {
+  try {
+    if (successAudio.value && successAudio.value.readyState >= 2) {
+      successAudio.value.currentTime = 0 // Сброс позиции для повторного воспроизведения
+      successAudio.value.play().catch(error => {
+        console.warn('Не удалось воспроизвести звук успеха:', error.message)
+      })
+    } else {
+      console.log('🔇 MP3 файл success.mp3 недоступен - игра продолжается без звука')
+    }
+  } catch (error) {
+    console.warn('Ошибка воспроизведения звука успеха:', error)
+  }
+}
+
+// Воспроизведение звука ошибки
+const playErrorSound = (): void => {
+  try {
+    if (errorAudio.value && errorAudio.value.readyState >= 2) {
+      errorAudio.value.currentTime = 0 // Сброс позиции для повторного воспроизведения
+      errorAudio.value.play().catch(error => {
+        console.warn('Не удалось воспроизвести звук ошибки:', error.message)
+      })
+    } else {
+      console.log('🔇 MP3 файл error.mp3 недоступен - игра продолжается без звука')
+    }
+  } catch (error) {
+    console.warn('Ошибка воспроизведения звука ошибки:', error)
+  }
+}
+
+// Воспроизведение звука нового раунда
+const playNewRoundSound = (): void => {
+  try {
+    if (newRoundAudio.value && newRoundAudio.value.readyState >= 2) {
+      newRoundAudio.value.currentTime = 0 // Сброс позиции для повторного воспроизведения
+      newRoundAudio.value.play().catch(error => {
+        console.warn('Не удалось воспроизвести звук нового раунда:', error.message)
+      })
+    } else {
+      console.log('🔇 MP3 файл newround.mp3 недоступен - игра продолжается без звука')
+    }
+  } catch (error) {
+    console.warn('Ошибка воспроизведения звука нового раунда:', error)
+  }
+}
+
 // Методы анимации
 const animateAnswerReveal = (answerIndex: number): void => {
+  // Проигрываем звук успешного открытия
+  playSuccessSound()
+  
   const answerCard = document.querySelectorAll('.answer-card')[answerIndex] as HTMLElement
   if (answerCard) {
     answerCard.classList.add('flip-animation')
@@ -128,6 +233,9 @@ const loadGameState = async (): Promise<void> => {
   try {
     const state = await GameApiService.getGameState()
     gameState.value = state
+    // Инициализируем previousRound текущим значением
+    previousRound.value = state.currentRound
+    console.log(`🎮 Загружено состояние игры, текущий раунд: ${state.currentRound}`)
   } catch (error) {
     console.error('❌ Ошибка загрузки состояния игры:', error)
   }
@@ -136,12 +244,22 @@ const loadGameState = async (): Promise<void> => {
 // Инициализация при монтировании компонента
 onMounted(async () => {
   try {
+    // Инициализируем звуковые файлы
+    initAudioFiles()
+    
     // Загружаем текущее состояние
     await loadGameState()
     
     // Подключаемся к SignalR с колбэками
     await signalRService.initialize({
       onGameStateChanged: (newGameState: GameState) => {
+        // Проверяем, изменился ли номер раунда
+        if (newGameState.currentRound > previousRound.value && newGameState.isGameActive) {
+          console.log(`🎵 Новый раунд ${newGameState.currentRound}! Проигрываем мелодию`)
+          playNewRoundSound()
+          previousRound.value = newGameState.currentRound
+        }
+        
         gameState.value = newGameState
       },
       onAnswerRevealed: (answerIndex: number) => {
@@ -153,6 +271,8 @@ onMounted(async () => {
       },
       onErrorsUpdated: (teams: Team[]) => {
         gameState.value.teams = teams
+        // Проигрываем звук ошибки при добавлении ошибки команде
+        playErrorSound()
       }
     })
   } catch (error) {
@@ -163,6 +283,20 @@ onMounted(async () => {
 // Очистка при размонтировании
 onUnmounted(async () => {
   await signalRService.disconnect()
+  
+  // Очистка аудио элементов
+  if (successAudio.value) {
+    successAudio.value.pause()
+    successAudio.value = null
+  }
+  if (errorAudio.value) {
+    errorAudio.value.pause()
+    errorAudio.value = null
+  }
+  if (newRoundAudio.value) {
+    newRoundAudio.value.pause()
+    newRoundAudio.value = null
+  }
 })
 </script>
 
@@ -244,10 +378,7 @@ onUnmounted(async () => {
 .team-score {
   font-size: 6rem;
   font-weight: 900;
-  background: linear-gradient(135deg, #ff6b6b, #ee5a24);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: white;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
   transition: all 0.3s ease;
 }
@@ -318,7 +449,7 @@ onUnmounted(async () => {
 
 .answer-card {
   position: relative;
-  height: 100px;
+  height: 80px;
   perspective: 1000px;
   cursor: pointer;
 }

@@ -30,6 +30,7 @@ export interface GameState {
   isRoundActive: boolean;
   revealedAnswers: number[];
   currentMode: GameMode;
+  roundPoints: number; // Накопленные очки за раунд
 }
 
 // API Response типы
