@@ -1,0 +1,20 @@
+{
+  "name": "game100to1-frontend",
+  "version": "1.0.0",
+  "description": "Frontend for 100 to 1 game",
+  "main": "src/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build --outDir ../Backend/Game100To1.Backend/wwwroot",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.4.0",
+    "@microsoft/signalr": "^8.0.0",
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.5.0",
+    "vite": "^5.0.0"
+  }
+}
