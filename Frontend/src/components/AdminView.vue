@@ -51,7 +51,7 @@
       <h2>Текущее состояние</h2>
       <div class="game-status">
         <div class="status-item">
-          <strong>Раунд:</strong> {{ gameState.currentRound }} / 5
+          <strong>Раунд:</strong> {{ gameState.currentRound }}
         </div>
         <div class="status-item">
           <strong>Множитель:</strong> x{{ gameState.roundMultiplier }}
@@ -72,6 +72,34 @@
             {{ gameState.isRoundActive ? 'Да' : 'Нет' }}
           </span>
         </div>
+      </div>
+    </div>
+
+    <!-- Настройка раунда -->
+    <div class="section">
+      <h2>Настройка раунда</h2>
+      <div class="round-setup">
+        <div class="round-control">
+          <label for="multiplier">Множитель очков:</label>
+          <select v-model="selectedMultiplier" id="multiplier" class="form-control">
+            <option value="1">x1 (Обычный)</option>
+            <option value="2">x2 (Двойной)</option>
+            <option value="3">x3 (Тройной)</option>
+            <option value="5">x5 (Пятикратный)</option>
+          </select>
+        </div>
+        
+        <div class="round-control">
+          <label for="gameMode">Режим раунда:</label>
+          <select v-model="selectedMode" id="gameMode" class="form-control">
+            <option value="0">Обычный раунд</option>
+            <option value="1">Самый редкий ответ</option>
+          </select>
+        </div>
+        
+        <button @click="updateRoundSettings" class="btn btn-primary" :disabled="!gameState.isGameActive">
+          🔧 Применить настройки раунда
+        </button>
       </div>
     </div>
 
@@ -167,6 +195,8 @@ export default {
       connection: null,
       team1Name: 'Команда 1',
       team2Name: 'Команда 2',
+      selectedMultiplier: 1,  // Выбранный множитель
+      selectedMode: 0,        // Выбранный режим игры
       gameState: {
         teams: [],
         currentRound: 1,
@@ -180,8 +210,14 @@ export default {
     }
   },
   async mounted() {
+    console.log('AdminView mounted, initializing...') // Для отладки
     await this.initializeSignalR()
+    
+    // Небольшая задержка для установления SignalR соединения
+    await new Promise(resolve => setTimeout(resolve, 100))
+    
     await this.loadGameState()
+    console.log('AdminView initialized, team names:', this.team1Name, this.team2Name) // Для отладки
   },
   beforeUnmount() {
     if (this.connection) {
@@ -195,12 +231,37 @@ export default {
         .build()
 
       this.connection.on('GameStateChanged', (gameState) => {
-        this.gameState = gameState
+        console.log('SignalR GameStateChanged:', gameState) // Для отладки
+        
+        if (gameState && typeof gameState === 'object') {
+          this.gameState = gameState
+          
+          // Синхронизируем названия команд при обновлении состояния
+          if (gameState.teams && gameState.teams.length >= 2) {
+            const newTeam1Name = gameState.teams[0].name || 'Команда 1'
+            const newTeam2Name = gameState.teams[1].name || 'Команда 2'
+            
+            // Обновляем только если названия действительно изменились
+            if (this.team1Name !== newTeam1Name || this.team2Name !== newTeam2Name) {
+              this.team1Name = newTeam1Name
+              this.team2Name = newTeam2Name
+              console.log('SignalR updated team names:', this.team1Name, this.team2Name) // Для отладки
+            }
+          }
+          
+          // Синхронизируем множитель и режим
+          this.selectedMultiplier = gameState.roundMultiplier || 1
+          this.selectedMode = gameState.currentMode || 0
+        } else {
+          console.warn('Invalid gameState received from SignalR:', gameState)
+        }
       })
 
       try {
         await this.connection.start()
+        console.log('SignalR connected successfully') // Для отладки
         await this.connection.invoke('JoinGame')
+        console.log('Joined SignalR game hub') // Для отладки
       } catch (err) {
         console.error('SignalR connection error:', err)
       }
@@ -210,7 +271,42 @@ export default {
       try {
         const response = await fetch('/api/game/state')
         if (response.ok) {
-          this.gameState = await response.json()
+          const data = await response.json()
+          console.log('Loaded game state data:', data) // Для отладки
+          
+          // API возвращает GameStateResponse с полем gameState
+          // Проверяем оба варианта - data.gameState и data напрямую
+          if (data.gameState) {
+            this.gameState = data.gameState
+          } else if (data.teams) {
+            // Если data содержит teams напрямую, значит это GameState
+            this.gameState = data
+          } else {
+            console.warn('Unexpected API response format:', data)
+            return
+          }
+          
+          // Синхронизируем названия команд с загруженным состоянием
+          if (this.gameState.teams && this.gameState.teams.length >= 2) {
+            const newTeam1Name = this.gameState.teams[0].name || 'Команда 1'
+            const newTeam2Name = this.gameState.teams[1].name || 'Команда 2'
+            
+            // Обновляем только если названия действительно изменились
+            if (this.team1Name !== newTeam1Name || this.team2Name !== newTeam2Name) {
+              this.team1Name = newTeam1Name
+              this.team2Name = newTeam2Name
+              console.log('Updated team names:', this.team1Name, this.team2Name) // Для отладки
+            }
+          } else {
+            console.warn('Teams not found in game state:', this.gameState)
+          }
+          
+          // Синхронизируем множитель и режим с состоянием игры
+          this.selectedMultiplier = this.gameState.roundMultiplier || 1
+          this.selectedMode = this.gameState.currentMode || 0
+          console.log('Synced round settings - Multiplier:', this.selectedMultiplier, 'Mode:', this.selectedMode)
+        } else {
+          console.error('Failed to load game state, status:', response.status)
         }
       } catch (error) {
         console.error('Error loading game state:', error)
@@ -219,22 +315,63 @@ export default {
 
     async updateTeamNames() {
       try {
+        console.log('Updating team names:', this.team1Name, this.team2Name) // Для отладки
+        
         const response = await fetch('/api/game/set-team-names', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            team1Name: this.team1Name,
-            team2Name: this.team2Name
+            Team1Name: this.team1Name,  // Pascal case для соответствия модели
+            Team2Name: this.team2Name   // Pascal case для соответствия модели
           })
         })
+        
         if (response.ok) {
+          const result = await response.json()
+          console.log('Team names update response:', result) // Для отладки
           this.showSuccess('Названия команд обновлены')
+        } else {
+          console.error('Failed to update team names, status:', response.status)
+          const errorText = await response.text()
+          console.error('Error response:', errorText)
+          this.showError('Ошибка при обновлении названий команд')
         }
       } catch (error) {
         console.error('Error updating team names:', error)
         this.showError('Ошибка при обновлении названий команд')
+      }
+    },
+
+    async updateRoundSettings() {
+      try {
+        console.log('Updating round settings - Multiplier:', this.selectedMultiplier, 'Mode:', this.selectedMode)
+        
+        const response = await fetch('/api/game/set-round-settings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            Multiplier: parseInt(this.selectedMultiplier),
+            Mode: parseInt(this.selectedMode)
+          })
+        })
+        
+        if (response.ok) {
+          const result = await response.json()
+          console.log('Round settings update response:', result)
+          this.showSuccess(`Настройки раунда обновлены: x${this.selectedMultiplier}, ${this.selectedMode === 0 ? 'Обычный' : 'Редкий ответ'}`)
+        } else {
+          console.error('Failed to update round settings, status:', response.status)
+          const errorText = await response.text()
+          console.error('Error response:', errorText)
+          this.showError('Ошибка при обновлении настроек раунда')
+        }
+      } catch (error) {
+        console.error('Error updating round settings:', error)
+        this.showError('Ошибка при обновлении настроек раунда')
       }
     },
 
@@ -447,6 +584,39 @@ export default {
 
 .team-input input::placeholder {
   color: rgba(255, 255, 255, 0.6);
+}
+
+.round-setup {
+  display: flex;
+  gap: 1.5rem;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.round-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 200px;
+}
+
+.round-control label {
+  font-weight: 600;
+  color: #ffdd00;
+}
+
+.form-control {
+  padding: 0.75rem;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 1rem;
+}
+
+.form-control option {
+  background: #333;
+  color: white;
 }
 
 .game-controls {

@@ -36,6 +36,12 @@ public class GameService
         this.gameState.Teams[1].Name = team2Name;
     }
 
+    public void SetRoundSettings(int multiplier, GameMode mode)
+    {
+        this.gameState.RoundMultiplier = multiplier;
+        this.gameState.CurrentMode = mode;
+    }
+
     public void StartNewGame()
     {
         this.gameState.CurrentRound = 1;
@@ -65,18 +71,8 @@ public class GameService
             team.Errors = 0;
         }
 
-        // Установка множителя в зависимости от раунда
-        this.gameState.RoundMultiplier = this.gameState.CurrentRound switch
-        {
-            1 or 2 => 1,
-            3 => 2,
-            4 => 3,
-            5 => 1, // Для раунда "редкий ответ"
-            _ => 1
-        };
-
-        // Установка режима игры
-        this.gameState.CurrentMode = this.gameState.CurrentRound == 5 ? GameMode.RareAnswer : GameMode.Normal;
+        // Множитель и режим теперь устанавливаются вручную админом
+        // Не изменяем RoundMultiplier и CurrentMode автоматически
     }
 
     public void NextRound()
@@ -136,6 +132,7 @@ public class GameService
             {
                 team.Score += points;
             }
+            
         }
     }
 

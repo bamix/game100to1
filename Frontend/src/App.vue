@@ -15,53 +15,48 @@
   </div>
 </template>
 
-<script>
+<script setup lang="ts">
+import { ref, onMounted, computed } from 'vue'
 import PlayerView from './components/PlayerView.vue'
 import AdminView from './components/AdminView.vue'
 
-export default {
-  name: 'App',
-  components: {
-    PlayerView,
-    AdminView
-  },
-  data() {
-    return {
-      currentRoute: null
-    }
-  },
-  mounted() {
-    // Простая маршрутизация на основе hash
-    this.updateRoute()
-    window.addEventListener('hashchange', this.updateRoute)
-  },
-  methods: {
-    updateRoute() {
-      const hash = window.location.hash.slice(1)
-      if (hash === 'player' || hash === 'admin') {
-        this.currentRoute = hash
-      } else {
-        this.currentRoute = null
-      }
-    },
-    goToPlayer() {
-      window.location.hash = 'player'
-    },
-    goToAdmin() {
-      window.location.hash = 'admin'
-    }
-  },
-  computed: {
-    routerView() {
-      if (this.currentRoute === 'player') {
-        return PlayerView
-      } else if (this.currentRoute === 'admin') {
-        return AdminView
-      }
+type RouteType = 'player' | 'admin' | null
+
+const currentRoute = ref<RouteType>(null)
+
+const routerView = computed(() => {
+  switch (currentRoute.value) {
+    case 'player':
+      return PlayerView
+    case 'admin':
+      return AdminView
+    default:
       return null
-    }
+  }
+})
+
+const updateRoute = (): void => {
+  const hash = window.location.hash.slice(1) as RouteType
+  if (hash === 'player' || hash === 'admin') {
+    currentRoute.value = hash
+  } else {
+    currentRoute.value = null
   }
 }
+
+const goToPlayer = (): void => {
+  window.location.hash = 'player'
+}
+
+const goToAdmin = (): void => {
+  window.location.hash = 'admin'
+}
+
+onMounted(() => {
+  // Простая маршрутизация на основе hash
+  updateRoute()
+  window.addEventListener('hashchange', updateRoute)
+})
 </script>
 
 <style>

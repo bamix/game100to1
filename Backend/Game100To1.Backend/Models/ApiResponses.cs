@@ -66,3 +66,8 @@ public record RemoveErrorResponse(string Message, int TeamId) : ApiResponse;
 /// Ответ при установке названий команд
 /// </summary>
 public record SetTeamNamesResponse(string Message, string Team1, string Team2) : ApiResponse;
+
+/// <summary>
+/// Ответ при установке настроек раунда
+/// </summary>
+public record SetRoundSettingsResponse(string Message, int Multiplier, string Mode) : ApiResponse;

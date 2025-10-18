@@ -161,6 +161,24 @@ public class GameController(GameService gameService, IHubContext<GameHub> hubCon
     }
 
     /// <summary>
+    /// Установить настройки раунда (множитель и режим)
+    /// </summary>
+    /// <param name="request">Запрос с настройками раунда</param>
+    /// <returns>Подтверждение обновления настроек</returns>
+    /// <response code="200">Настройки раунда успешно обновлены</response>
+    [HttpPost("set-round-settings")]
+    [ProducesResponseType<SetRoundSettingsResponse>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<SetRoundSettingsResponse>> SetRoundSettings([FromBody] SetRoundSettingsRequest request)
+    {
+        var mode = (GameMode)request.Mode;
+        gameService.SetRoundSettings(request.Multiplier, mode);
+        await hubContext.Clients.All.SendAsync("GameStateChanged", gameService.GetGameState());
+        
+        var modeString = mode == GameMode.Normal ? "Обычный" : "Редкий ответ";
+        return Ok(new SetRoundSettingsResponse($"Настройки раунда обновлены: x{request.Multiplier}, {modeString}", request.Multiplier, modeString));
+    }
+
+    /// <summary>
     /// Получить информацию о доступных SignalR событиях
     /// </summary>
     /// <returns>Список доступных SignalR событий</returns>
