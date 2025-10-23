@@ -8,7 +8,18 @@ public record ApiResponse();
 /// <summary>
 /// Ответ с состоянием игры
 /// </summary>
-public record GameStateResponse(GameState GameState) : ApiResponse;
+public record GameStateResponse : ApiResponse
+{
+    public List<Team> Teams { get; set; } = new();
+    public int CurrentRound { get; set; } = 1;
+    public Question? CurrentQuestion { get; set; }
+    public int RoundMultiplier { get; set; } = 1;
+    public bool IsGameActive { get; set; } = false;
+    public bool IsRoundActive { get; set; } = false;
+    public List<int> RevealedAnswers { get; set; } = new();
+    public GameMode CurrentMode { get; set; } = GameMode.Normal;
+    public int RoundPoints { get; set; } = 0; // Накопленные очки за раунд
+}
 
 /// <summary>
 /// Ответ при запуске новой игры

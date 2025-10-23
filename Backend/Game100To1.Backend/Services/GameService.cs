@@ -17,7 +17,26 @@ public class GameService
         InitializeTeams();
     }
 
-    public GameState GetGameState() => this.gameState;
+    public GameStateResponse GetGameState() => new()
+    {
+        Teams = this.gameState.Teams,
+        RoundPoints = this.gameState.RoundPoints,
+        CurrentQuestion = this.gameState.CurrentQuestion == null
+            ? null
+            : this.gameState.CurrentMode == GameMode.Normal
+                ? this.gameState.CurrentQuestion
+                : new Question
+                {
+                    Text = this.gameState.CurrentQuestion.Text,
+                    Answers = this.gameState.CurrentQuestion.Answers.Select((answer, i) => new Answer { Text = answer.Text, Points = CalculateRareAnswerPoints(i) }).ToList()
+                },
+        RevealedAnswers = this.gameState.RevealedAnswers.Select(a => a.Key).ToList(),
+        CurrentMode = this.gameState.CurrentMode,
+        CurrentRound = this.gameState.CurrentRound,
+        IsGameActive = this.gameState.IsGameActive,
+        IsRoundActive = this.gameState.IsRoundActive,
+        RoundMultiplier = this.gameState.RoundMultiplier
+    };
 
     public List<Question> GetAllQuestions() => this.questions;
 
@@ -82,19 +101,19 @@ public class GameService
         {
             this.gameState.CurrentRound++;
             this.gameState.IsRoundActive = true; // Сразу активируем раунд
-            
+
             // Сбрасываем раскрытые ответы
             this.gameState.RevealedAnswers.Clear();
-            
+
             // Сбрасываем счетчик очков раунда
             this.gameState.RoundPoints = 0;
-            
+
             // Сбрасываем ошибки команд
             foreach (var team in this.gameState.Teams)
             {
                 team.Errors = 0;
             }
-            
+
             LoadRandomQuestion();
         }
     }
@@ -105,30 +124,34 @@ public class GameService
         LoadRandomQuestion();
     }
 
-    public void RevealAnswer(int answerIndex)
+    public void RevealAnswer(int answerIndex, bool countPoints)
     {
-        if (answerIndex >= 0 && answerIndex < (this.gameState.CurrentQuestion?.Answers.Count ?? 0))
+        if (this.gameState.CurrentQuestion?.Answers != null &&
+            answerIndex >= 0 && answerIndex < this.gameState.CurrentQuestion.Answers.Count)
         {
-            if (!this.gameState.RevealedAnswers.Contains(answerIndex))
+            this.gameState.RevealedAnswers.TryAdd(answerIndex, countPoints);
+        }
+
+        if (this.gameState.CurrentQuestion == null)
+        {
+            this.gameState.RoundPoints = 0;
+            return;
+        }
+
+        if (this.gameState.CurrentMode == GameMode.Normal)
+        {
+            this.gameState.RoundPoints = 0;
+            var answersToCount = this.gameState.RevealedAnswers.Where(a => a.Value).Select(a => a.Key).ToHashSet();
+            foreach (var i in answersToCount)
             {
-                this.gameState.RevealedAnswers.Add(answerIndex);
-                
-                // Добавляем очки к счетчику раунда
-                var answer = this.gameState.CurrentQuestion.Answers[answerIndex];
-                this.gameState.RoundPoints += answer.Points;
+                this.gameState.RoundPoints += this.gameState.CurrentQuestion.Answers[i].Points;
             }
         }
-    }
-
-    public void RevealAnswerWithoutPoints(int answerIndex)
-    {
-        if (answerIndex >= 0 && answerIndex < (this.gameState.CurrentQuestion?.Answers.Count ?? 0))
+        else
         {
-            if (!this.gameState.RevealedAnswers.Contains(answerIndex))
-            {
-                this.gameState.RevealedAnswers.Add(answerIndex);
-                // Не добавляем очки к счетчику раунда
-            }
+            this.gameState.RoundPoints = this.gameState.RevealedAnswers.Any()
+                ? CalculateRareAnswerPoints(this.gameState.RevealedAnswers.Where(a => a.Value).Max(x => x.Key))
+                : 0;
         }
     }
 
@@ -140,7 +163,7 @@ public class GameService
             // Присваиваем все накопленные очки раунда команде с применением множителя
             int finalPoints = this.gameState.RoundPoints * this.gameState.RoundMultiplier;
             team.Score += finalPoints;
-            
+
             // Сбрасываем счетчик очков раунда
             this.gameState.RoundPoints = 0;
         }
@@ -240,6 +263,19 @@ public class GameService
                     new() { Text = "Собак", Points = 5 }
                 }
             }
+        };
+    }
+
+    private int CalculateRareAnswerPoints(int index)
+    {
+        return index switch
+        {
+            0 => 15,
+            1 => 30,
+            2 => 60,
+            3 => 120,
+            4 => 180,
+            5 => 240
         };
     }
 }

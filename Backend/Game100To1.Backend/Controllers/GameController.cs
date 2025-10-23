@@ -20,8 +20,8 @@ public class GameController(GameService gameService, IHubContext<GameHub> hubCon
     [ProducesResponseType<GameStateResponse>(StatusCodes.Status200OK)]
     public ActionResult<GameStateResponse> GetGameState()
     {
-        var gameState = gameService.GetGameState();
-        return Ok(new GameStateResponse(gameState));
+        var gameStateResponse = gameService.GetGameState();
+        return Ok(gameStateResponse);
     }
 
     /// <summary>
@@ -90,7 +90,7 @@ public class GameController(GameService gameService, IHubContext<GameHub> hubCon
     [ProducesResponseType<RevealAnswerResponse>(StatusCodes.Status200OK)]
     public async Task<ActionResult<RevealAnswerResponse>> RevealAnswer(int answerIndex)
     {
-        gameService.RevealAnswer(answerIndex);
+        gameService.RevealAnswer(answerIndex, true);
         await hubContext.Clients.All.SendAsync("AnswerRevealed", answerIndex);
         await hubContext.Clients.All.SendAsync("GameStateChanged", gameService.GetGameState());
         return Ok(new RevealAnswerResponse($"Ответ {answerIndex + 1} открыт", answerIndex));
@@ -106,7 +106,7 @@ public class GameController(GameService gameService, IHubContext<GameHub> hubCon
     [ProducesResponseType<RevealAnswerResponse>(StatusCodes.Status200OK)]
     public async Task<ActionResult<RevealAnswerResponse>> RevealAnswerWithoutPoints(int answerIndex)
     {
-        gameService.RevealAnswerWithoutPoints(answerIndex);
+        gameService.RevealAnswer(answerIndex, false);
         await hubContext.Clients.All.SendAsync("AnswerRevealed", answerIndex);
         await hubContext.Clients.All.SendAsync("GameStateChanged", gameService.GetGameState());
         return Ok(new RevealAnswerResponse($"Ответ {answerIndex + 1} открыт без очков", answerIndex));
@@ -205,7 +205,7 @@ public class GameController(GameService gameService, IHubContext<GameHub> hubCon
         var mode = (GameMode)request.Mode;
         gameService.SetRoundSettings(request.Multiplier, mode);
         await hubContext.Clients.All.SendAsync("GameStateChanged", gameService.GetGameState());
-        
+
         var modeString = mode == GameMode.Normal ? "Обычный" : "Редкий ответ";
         return Ok(new SetRoundSettingsResponse($"Настройки раунда обновлены: x{request.Multiplier}, {modeString}", request.Multiplier, modeString));
     }
